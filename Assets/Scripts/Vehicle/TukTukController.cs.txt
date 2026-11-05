@@ -1,0 +1,94 @@
+
+using UnityEngine;
+
+[RequireComponent(typeof(Rigidbody))]
+public class TukTukController : MonoBehaviour
+{
+    [Header("Movement")]
+    [SerializeField] private float acceleration = 12f;
+    [SerializeField] private float maxSpeed = 15f;
+    [SerializeField] private float reverseSpeed = 5f;
+    [SerializeField] private float turnSpeed = 90f;
+    [SerializeField] private float brakeStrength = 8f;
+
+    private Rigidbody rb;
+    private float throttle;
+    private float steering;
+    private bool braking;
+
+    public float CurrentSpeed => rb != null
+        ? rb.linearVelocity.magnitude * 3.6f
+        : 0f;
+
+    private void Awake()
+    {
+        rb = GetComponent<Rigidbody>();
+        rb.mass = 650f;
+        rb.linearDamping = 1.5f;
+        rb.angularDamping = 3f;
+        rb.constraints = RigidbodyConstraints.FreezeRotationX |
+                         RigidbodyConstraints.FreezeRotationZ;
+    }
+
+    private void Update()
+    {
+        throttle = 0f;
+        steering = 0f;
+
+        if (Input.GetKey(KeyCode.W) ||
+            Input.GetKey(KeyCode.UpArrow))
+            throttle = 1f;
+
+        if (Input.GetKey(KeyCode.S) ||
+            Input.GetKey(KeyCode.DownArrow))
+            throttle = -1f;
+
+        if (Input.GetKey(KeyCode.A))
+            steering = -1f;
+
+        if (Input.GetKey(KeyCode.D))
+            steering = 1f;
+
+        braking = Input.GetKey(KeyCode.Space);
+    }
+
+    private void FixedUpdate()
+    {
+        Vector3 velocity = rb.linearVelocity;
+        float forwardSpeed = Vector3.Dot(
+            velocity, transform.forward);
+
+        if (throttle > 0f && forwardSpeed < maxSpeed)
+        {
+            rb.AddForce(
+                transform.forward * acceleration,
+                ForceMode.Acceleration);
+        }
+        else if (throttle < 0f && forwardSpeed > -reverseSpeed)
+        {
+            rb.AddForce(
+                -transform.forward * acceleration * 0.6f,
+                ForceMode.Acceleration);
+        }
+
+        if (braking)
+        {
+            rb.AddForce(
+                -velocity * brakeStrength,
+                ForceMode.Acceleration);
+        }
+
+        if (Mathf.Abs(forwardSpeed) > 0.5f)
+        {
+            float direction = forwardSpeed >= 0 ? 1f : -1f;
+
+            Quaternion rotation = Quaternion.Euler(
+                0f,
+                steering * turnSpeed * direction *
+                Time.fixedDeltaTime,
+                0f);
+
+            rb.MoveRotation(rb.rotation * rotation);
+        }
+    }
+}
