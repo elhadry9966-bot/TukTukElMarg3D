@@ -396,7 +396,6 @@ GameObject:
   - component: {fileID: 791548504}
   - component: {fileID: 791548503}
   - component: {fileID: 791548502}
-  - component: {fileID: 791548501}
   m_Layer: 0
   m_Name: TukTuk
   m_TagString: Untagged
@@ -404,18 +403,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &791548501
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 791548500}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cce3dfde8e3764b41a63bb8669b63f52, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: '::'
 --- !u!54 &791548502
 Rigidbody:
   m_ObjectHideFlags: 0

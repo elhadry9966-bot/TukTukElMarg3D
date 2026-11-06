@@ -13,6 +13,7 @@ public sealed class TukTukController : MonoBehaviour
     [SerializeField, Min(0f)] private float brakeStrength = 11f;
     [SerializeField, Min(0f)] private float coastingDeceleration = 2.5f;
     [SerializeField, Min(0f)] private float lateralGrip = 4f;
+    [SerializeField] private bool showControlDebugOverlay = true;
 
     private Rigidbody body;
     private Vector3 startPosition;
@@ -21,6 +22,9 @@ public sealed class TukTukController : MonoBehaviour
     private float steeringInput;
     private bool isBraking;
     private bool warnedAboutMissingKeyboard;
+
+    public float ThrottleInput => throttleInput;
+    public float SteeringInput => steeringInput;
 
     public float CurrentSpeedKph
     {
@@ -44,8 +48,7 @@ public sealed class TukTukController : MonoBehaviour
         body.angularDamping = 4f;
         body.interpolation = RigidbodyInterpolation.Interpolate;
         body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-        body.constraints = RigidbodyConstraints.FreezeRotationX |
-                           RigidbodyConstraints.FreezeRotationZ;
+        body.constraints = RigidbodyConstraints.None;
         body.centerOfMass = new Vector3(0f, -0.42f, 0f);
         body.WakeUp();
 
@@ -144,9 +147,22 @@ public sealed class TukTukController : MonoBehaviour
         body.linearVelocity = Vector3.zero;
         body.angularVelocity = Vector3.zero;
         body.position = startPosition;
-        body.rotation = startRotation;
+        body.rotation = Quaternion.Euler(0f, startRotation.eulerAngles.y, 0f);
         throttleInput = 0f;
         steeringInput = 0f;
         isBraking = false;
+    }
+
+    private void OnGUI()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!showControlDebugOverlay)
+            return;
+
+        GUI.Box(new Rect(12f, 12f, 290f, 76f), "TukTuk Controls");
+        GUI.Label(
+            new Rect(22f, 38f, 270f, 42f),
+            $"Speed: {CurrentSpeedKph:0.0} km/h   Forward: {throttleInput:0.0}\nSteering: {steeringInput:0.0}   Brake: {(isBraking ? "ON" : "OFF")}");
+#endif
     }
 }
