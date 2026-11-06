@@ -29,6 +29,11 @@ public sealed class TukTukController : MonoBehaviour
     private bool reverseKeyPressed;
     private bool leftKeyPressed;
     private bool rightKeyPressed;
+    private bool isGrounded;
+    private Vector3 appliedMovement;
+    private Vector3 physicsStepDisplacement;
+    private Vector3 previousPhysicsPosition;
+    private string collisionContact = "none";
 
     public float ThrottleInput => throttleInput;
     public float SteeringInput => steeringInput;
@@ -37,6 +42,13 @@ public sealed class TukTukController : MonoBehaviour
     public bool ReverseKeyPressed => reverseKeyPressed;
     public bool LeftKeyPressed => leftKeyPressed;
     public bool RightKeyPressed => rightKeyPressed;
+    public bool IsGrounded => isGrounded;
+    public bool IsBraking => isBraking;
+    public Vector3 AppliedMovement => appliedMovement;
+    public Vector3 PhysicsStepDisplacement => physicsStepDisplacement;
+    public Vector3 RigidbodyVelocity => body != null ? body.linearVelocity : Vector3.zero;
+    public Vector3 RigidbodyPosition => body != null ? body.position : Vector3.zero;
+    public string CollisionContact => collisionContact;
 
 #if ENABLE_INPUT_SYSTEM
     public string InputBackend => "Input System";
@@ -73,6 +85,7 @@ public sealed class TukTukController : MonoBehaviour
 
         startPosition = transform.position;
         startRotation = transform.rotation;
+        previousPhysicsPosition = body.position;
     }
 
     private void Update()
@@ -137,6 +150,14 @@ public sealed class TukTukController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        physicsStepDisplacement = body.position - previousPhysicsPosition;
+        previousPhysicsPosition = body.position;
+        isGrounded = body.SweepTest(
+            Vector3.down,
+            out _,
+            Mathf.Max(0.1f, Time.fixedDeltaTime * 2f),
+            QueryTriggerInteraction.Ignore);
+
         float forwardSpeed = Vector3.Dot(body.linearVelocity, transform.forward);
         float targetSpeed = throttleInput > 0f
             ? maximumForwardSpeed
@@ -158,8 +179,9 @@ public sealed class TukTukController : MonoBehaviour
             forwardSpeed,
             targetSpeed,
             speedChangeRate * Time.fixedDeltaTime);
+        appliedMovement = transform.forward * (adjustedSpeed - forwardSpeed);
         body.AddForce(
-            transform.forward * ((adjustedSpeed - forwardSpeed) / Time.fixedDeltaTime),
+            appliedMovement / Time.fixedDeltaTime,
             ForceMode.Acceleration);
 
         float lateralSpeed = Vector3.Dot(body.linearVelocity, transform.right);
@@ -177,13 +199,17 @@ public sealed class TukTukController : MonoBehaviour
             body.MoveRotation(body.rotation * Quaternion.Euler(0f, yaw, 0f));
         }
 
-        Vector3 velocity = body.linearVelocity;
-        forwardSpeed = Vector3.Dot(velocity, transform.forward);
-        float clampedForwardSpeed = Mathf.Clamp(
-            forwardSpeed,
-            -maximumReverseSpeed,
-            maximumForwardSpeed);
-        body.linearVelocity = velocity + transform.forward * (clampedForwardSpeed - forwardSpeed);
+    }
+
+    private void OnCollisionStay(Collision collision)
+    {
+        collisionContact = $"{collision.gameObject.name} (impulse {collision.impulse.magnitude:0.00})";
+    }
+
+    private void OnCollisionExit(Collision collision)
+    {
+        if (collisionContact.StartsWith(collision.gameObject.name + " ", System.StringComparison.Ordinal))
+            collisionContact = "none";
     }
 
     private void ResetVehicle()
@@ -199,6 +225,9 @@ public sealed class TukTukController : MonoBehaviour
         reverseKeyPressed = false;
         leftKeyPressed = false;
         rightKeyPressed = false;
+        appliedMovement = Vector3.zero;
+        physicsStepDisplacement = Vector3.zero;
+        previousPhysicsPosition = body.position;
     }
 
     private void ClearInput()
@@ -223,15 +252,19 @@ public sealed class TukTukController : MonoBehaviour
             : "NOT DETECTED";
         string rigidbodyState = body == null
             ? "MISSING"
-            : $"active={body.gameObject.activeInHierarchy}, kinematic={body.isKinematic}, collisions={body.detectCollisions}";
-        GUI.Box(new Rect(12f, 12f, 360f, 154f), "TukTuk Controls");
+            : $"active={body.gameObject.activeInHierarchy}, kinematic={body.isKinematic}, collisions={body.detectCollisions}, constraints={body.constraints}";
+        GUI.Box(new Rect(12f, 12f, 470f, 236f), "TukTuk Controls");
         GUI.Label(
-            new Rect(22f, 38f, 340f, 120f),
+            new Rect(22f, 38f, 450f, 202f),
             $"Input: {InputBackend} | Keyboard: {keyboardState}\n" +
             $"W/Up: {forwardKeyPressed}  S/Down: {reverseKeyPressed}  A/Left: {leftKeyPressed}  D/Right: {rightKeyPressed}\n" +
-            $"Forward: {throttleInput:0.0}  Steering: {steeringInput:0.0}  Brake: {(isBraking ? "ON" : "OFF")}\n" +
-            $"Speed: {CurrentSpeedKph:0.0} km/h | Controller: {(isActiveAndEnabled ? "ENABLED" : "DISABLED")}\n" +
-            $"Rigidbody: {rigidbodyState}");
+            $"Forward Input: {throttleInput:0.0} | Steering Input: {steeringInput:0.0} | Brake: {(isBraking ? "ON" : "OFF")}\n" +
+            $"Speed: {CurrentSpeedKph:0.0} km/h | Applied Movement Δv: {appliedMovement} m/s\n" +
+            $"Rigidbody Velocity: {RigidbodyVelocity} m/s\n" +
+            $"Rigidbody Position: {RigidbodyPosition} | Physics ΔPosition: {physicsStepDisplacement}\n" +
+            $"Grounded: {isGrounded} | Contact: {collisionContact}\n" +
+            $"Time Scale: {Time.timeScale:0.00} | Fixed Timestep: {Time.fixedDeltaTime:0.000}\n" +
+            $"Controller: {(isActiveAndEnabled ? "ENABLED" : "DISABLED")} | Rigidbody: {rigidbodyState}");
 #endif
     }
 }

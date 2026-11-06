@@ -41,7 +41,7 @@ public static class TukTukControlDiagnostics
             Report($"Rigidbody ({controller.name})", bodyReady,
                 body == null
                     ? "Missing Rigidbody on the controlled GameObject."
-                    : $"GameObject active={body.gameObject.activeInHierarchy}, kinematic={body.isKinematic}, collisions={body.detectCollisions}, constraints={body.constraints}, velocity={body.linearVelocity}");
+                    : $"GameObject active={body.gameObject.activeInHierarchy}, kinematic={body.isKinematic}, collisions={body.detectCollisions}, constraints={body.constraints}, mass={body.mass:0.0}, linear damping={body.linearDamping:0.00}, angular damping={body.angularDamping:0.00}, interpolation={body.interpolation}, collision detection={body.collisionDetectionMode}, velocity={body.linearVelocity}, position={body.position}");
             if (!bodyReady)
                 failures++;
 
@@ -58,6 +58,9 @@ public static class TukTukControlDiagnostics
             {
                 Report("Play Mode input readings", controller.KeyboardDetected,
                     $"keyboard={controller.KeyboardDetected}, W/Up={controller.ForwardKeyPressed}, S/Down={controller.ReverseKeyPressed}, A/Left={controller.LeftKeyPressed}, D/Right={controller.RightKeyPressed}, forward={controller.ThrottleInput:0.0}, steering={controller.SteeringInput:0.0}, speed={controller.CurrentSpeedKph:0.0} km/h");
+                Debug.Log(
+                    $"[TukTuk Controls] LIVE — Play Mode movement readings: applied movement Δv={controller.AppliedMovement} m/s, Rigidbody velocity={controller.RigidbodyVelocity} m/s, position={controller.RigidbodyPosition}, physics Δposition={controller.PhysicsStepDisplacement}, grounded={controller.IsGrounded}, brake={controller.IsBraking}, contact={controller.CollisionContact}, timeScale={Time.timeScale:0.00}, fixedDeltaTime={Time.fixedDeltaTime:0.000}",
+                    controller);
             }
         }
 
