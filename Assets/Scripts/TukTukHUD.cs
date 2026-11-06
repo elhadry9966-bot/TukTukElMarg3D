@@ -29,7 +29,7 @@ public sealed class TukTukHUD : MonoBehaviour
 
         if (cameraModeText != null && vehicleCamera != null)
             cameraModeText.text = vehicleCamera.IsFirstPerson
-                ? "الكاميرا: منظور السائق (V للتبديل)"
-                : "الكاميرا: خلفية (V للتبديل)";
+                ? "الكاميرا: منظور السائق (زر الكاميرا / V)"
+                : "الكاميرا: خلفية (زر الكاميرا / V)";
     }
 }

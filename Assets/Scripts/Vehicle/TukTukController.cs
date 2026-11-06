@@ -50,6 +50,14 @@ public sealed class TukTukController : MonoBehaviour
     public Vector3 RigidbodyPosition => body != null ? body.position : Vector3.zero;
     public string CollisionContact => collisionContact;
 
+    // Mobile / on-screen camera controls read by TukTukCamera.
+    // Buttons or a touch area can set MobileCameraDelta every frame and call
+    // PressMobileCameraToggle() to switch between the rear and driver cameras.
+    private int mobileCameraToggleFrame = -1;
+    public Vector2 MobileCameraDelta { get; set; }
+    public bool MobileCameraTogglePressedThisFrame => mobileCameraToggleFrame == Time.frameCount;
+    public void PressMobileCameraToggle() => mobileCameraToggleFrame = Time.frameCount;
+
 #if ENABLE_INPUT_SYSTEM
     public string InputBackend => "Input System";
 #elif ENABLE_LEGACY_INPUT_MANAGER
@@ -81,11 +89,33 @@ public sealed class TukTukController : MonoBehaviour
         body.interpolation = RigidbodyInterpolation.Interpolate;
         body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         body.centerOfMass = new Vector3(0f, -0.42f, 0f);
+        ApplySlipperyBodyMaterial();
         body.WakeUp();
 
         startPosition = transform.position;
         startRotation = transform.rotation;
         previousPhysicsPosition = body.position;
+    }
+
+    // The driving code pushes the body with a limited force. With Unity's default
+    // friction (0.6) the ground eats most of that force and the tuk-tuk barely
+    // moves. The controller already handles grip itself (lateralGrip), so the
+    // body collider gets zero friction.
+    private void ApplySlipperyBodyMaterial()
+    {
+        BoxCollider bodyCollider = GetComponent<BoxCollider>();
+        if (bodyCollider == null)
+            return;
+
+        PhysicsMaterial slippery = new PhysicsMaterial("TukTuk Body (no friction)")
+        {
+            dynamicFriction = 0f,
+            staticFriction = 0f,
+            bounciness = 0f,
+            frictionCombine = PhysicsMaterialCombine.Minimum,
+            bounceCombine = PhysicsMaterialCombine.Minimum
+        };
+        bodyCollider.sharedMaterial = slippery;
     }
 
     private void Update()
