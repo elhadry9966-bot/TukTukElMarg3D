@@ -180,6 +180,12 @@ public sealed class TukTukController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (body.position.y < -1.5f)
+        {
+            RecoverFromFall();
+            return;
+        }
+
         physicsStepDisplacement = body.position - previousPhysicsPosition;
         previousPhysicsPosition = body.position;
         isGrounded = body.SweepTest(
@@ -240,6 +246,31 @@ public sealed class TukTukController : MonoBehaviour
     {
         if (collisionContact.StartsWith(collision.gameObject.name + " ", System.StringComparison.Ordinal))
             collisionContact = "none";
+    }
+
+    // Safety net: if the tuk-tuk ever drops below the map it is put back at the
+    // start, and the Console gets one line that says what is above it.
+    private void RecoverFromFall()
+    {
+        Vector3 fallenPosition = body.position;
+        string above = Physics.Raycast(
+                fallenPosition,
+                Vector3.up,
+                out RaycastHit hit,
+                60f,
+                ~0,
+                QueryTriggerInteraction.Ignore)
+            ? $"{hit.collider.name} (y={hit.point.y:0.00})"
+            : "nothing";
+        Debug.LogWarning(
+            $"[TukTuk] Fell below the map at {fallenPosition}, velocity {body.linearVelocity}. " +
+            $"First collider above it: {above}. Respawning at the start.",
+            this);
+
+        ResetVehicle();
+        TukTukCamera followCamera = FindFirstObjectByType<TukTukCamera>();
+        if (followCamera != null)
+            followCamera.SetTarget(this);
     }
 
     private void ResetVehicle()
