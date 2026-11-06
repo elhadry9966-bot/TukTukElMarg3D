@@ -19,6 +19,7 @@ public sealed class TukTukCamera : MonoBehaviour
     private bool firstPerson;
 
     public bool IsFirstPerson => firstPerson;
+    public TukTukController Target => target;
 
     public void SetTarget(TukTukController vehicle)
     {
