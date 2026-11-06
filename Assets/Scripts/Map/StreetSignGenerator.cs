@@ -6,6 +6,8 @@ public sealed class StreetSignGenerator : MonoBehaviour
 {
     [SerializeField, Min(2f)] private float signHeight = 4.1f;
     [SerializeField, Min(3f)] private float maximumBoardLength = 7.8f;
+    [SerializeField, Min(0.5f)] private float intersectionClearance = 1f;
+    [SerializeField, Min(2f)] private float minimumBoardLength = 3f;
     [SerializeField] private Material boardMaterial;
     [SerializeField] private Material postMaterial;
     [SerializeField] private Color letteringColor = new Color(1f, 0.94f, 0.72f);
@@ -28,22 +30,96 @@ public sealed class StreetSignGenerator : MonoBehaviour
                 road.name == "شارع المحطة")
                 continue;
 
+            if (!TryFindSignSpan(road, roadGenerator, out Vector2 signSpan))
+            {
+                Debug.LogWarning(
+                    $"No clear sidewalk span is wide enough for a sign on '{road.name}'.",
+                    this);
+                continue;
+            }
+
             for (int side = -1; side <= 1; side += 2)
-                CreateRoadNameSign(signs, road, side);
+                CreateRoadNameSign(signs, road, side, signSpan, roadGenerator);
         }
         NeighborhoodGeometry.CombineVisuals(signs);
     }
 
-    private void CreateRoadNameSign(Transform output, NeighborhoodRoad road, int side)
+    private bool TryFindSignSpan(
+        NeighborhoodRoad road,
+        RoadGenerator roadGenerator,
+        out Vector2 bestSpan)
     {
-        float offset = road.width * 0.5f + roadGeneratorSidewalkWidth();
+        NeighborhoodGenerator neighborhood = GetComponent<NeighborhoodGenerator>();
+        Vector2 mapExtents = neighborhood != null
+            ? neighborhood.MapHalfExtents
+            : new Vector2(70f, 80f);
+        float roadHalfExtent = road.runsAlongX ? mapExtents.x : mapExtents.y;
+        float roadLength = Mathf.Min(road.length, (roadHalfExtent + 4f) * 2f);
+        float alongCenter = road.runsAlongX ? road.center.x : road.center.z;
+        float rangeStart = alongCenter - roadLength * 0.5f;
+        float rangeEnd = alongCenter + roadLength * 0.5f;
+        List<Vector2> blockedSpans = new List<Vector2>();
+        NeighborhoodRoad[] roads = roadGenerator.Roads;
+
+        for (int i = 0; i < roads.Length; i++)
+        {
+            NeighborhoodRoad crossing = roads[i];
+            if (crossing.runsAlongX == road.runsAlongX)
+                continue;
+
+            float crossingCenter = road.runsAlongX
+                ? crossing.center.x
+                : crossing.center.z;
+            float blockedRadius = crossing.width * 0.5f +
+                                  minimumBoardLength * 0.5f +
+                                  intersectionClearance;
+            float blockedStart = Mathf.Max(rangeStart, crossingCenter - blockedRadius);
+            float blockedEnd = Mathf.Min(rangeEnd, crossingCenter + blockedRadius);
+            if (blockedStart < blockedEnd)
+                blockedSpans.Add(new Vector2(blockedStart, blockedEnd));
+        }
+
+        blockedSpans.Sort((left, right) => left.x.CompareTo(right.x));
+        float cursor = rangeStart;
+        bestSpan = Vector2.zero;
+        float bestLength = 0f;
+
+        for (int i = 0; i <= blockedSpans.Count; i++)
+        {
+            float segmentEnd = i < blockedSpans.Count
+                ? blockedSpans[i].x
+                : rangeEnd;
+            if (segmentEnd - cursor > bestLength)
+            {
+                bestSpan = new Vector2(cursor, segmentEnd);
+                bestLength = segmentEnd - cursor;
+            }
+
+            if (i < blockedSpans.Count)
+                cursor = Mathf.Max(cursor, blockedSpans[i].y);
+        }
+
+        return bestLength >= minimumBoardLength + intersectionClearance * 2f;
+    }
+
+    private void CreateRoadNameSign(
+        Transform output,
+        NeighborhoodRoad road,
+        int side,
+        Vector2 signSpan,
+        RoadGenerator roadGenerator)
+    {
+        float along = (signSpan.x + signSpan.y) * 0.5f;
+        float boardLength = Mathf.Min(
+            maximumBoardLength,
+            signSpan.y - signSpan.x - intersectionClearance * 2f);
+        float lateralOffset = road.width * 0.5f + roadGenerator.SidewalkWidth * 0.5f;
         Vector3 position = road.runsAlongX
-            ? new Vector3(0f, 0f, road.center.z + side * offset)
-            : new Vector3(road.center.x + side * offset, 0f, 0f);
-        bool faceAlongX = road.runsAlongX;
-        Vector3 boardSize = faceAlongX
-            ? new Vector3(maximumBoardLength, 0.88f, 0.18f)
-            : new Vector3(0.18f, 0.88f, maximumBoardLength);
+            ? new Vector3(along, 0f, road.center.z + side * lateralOffset)
+            : new Vector3(road.center.x + side * lateralOffset, 0f, along);
+        Vector3 boardSize = road.runsAlongX
+            ? new Vector3(boardLength, 0.88f, 0.18f)
+            : new Vector3(0.18f, 0.88f, boardLength);
         NeighborhoodGeometry.Box(
             "Arabic street-name signboard",
             output,
@@ -53,45 +129,35 @@ public sealed class StreetSignGenerator : MonoBehaviour
 
         Vector3 textPosition = position + Vector3.up * signHeight;
         Quaternion facing;
-        if (faceAlongX)
+        if (road.runsAlongX)
         {
-            facing = Quaternion.Euler(0f, side > 0 ? 0f : 180f, 0f);
-            textPosition.z += side * 0.12f;
+            facing = Quaternion.Euler(0f, side > 0 ? 180f : 0f, 0f);
+            textPosition.z -= side * 0.12f;
         }
         else
         {
-            facing = Quaternion.Euler(0f, side > 0 ? 90f : -90f, 0f);
-            textPosition.x += side * 0.12f;
+            facing = Quaternion.Euler(0f, side > 0 ? -90f : 90f, 0f);
+            textPosition.x -= side * 0.12f;
         }
 
+        float characterSize = Mathf.Min(0.14f, boardLength / 42f);
         NeighborhoodGeometry.Text(
             "Arabic street name — " + road.name,
             output,
             textPosition,
             facing,
             road.name,
-            0.14f,
+            characterSize,
             letteringColor,
             44);
 
-        Vector3 polePosition = road.runsAlongX
-            ? new Vector3(position.x, signHeight * 0.5f, position.z)
-            : new Vector3(position.x, signHeight * 0.5f, position.z);
         NeighborhoodGeometry.Cylinder(
             "Street sign post",
             output,
-            polePosition,
+            position + Vector3.up * (signHeight * 0.5f),
             new Vector3(0.1f, signHeight * 0.5f, 0.1f),
             postMaterial,
             true);
-    }
-
-    private float roadGeneratorSidewalkWidth()
-    {
-        NeighborhoodGenerator neighborhood = GetComponent<NeighborhoodGenerator>();
-        return neighborhood != null && neighborhood.Roads != null
-            ? neighborhood.Roads.SidewalkWidth + 0.65f
-            : 3.3f;
     }
 }
 
