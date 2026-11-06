@@ -1,6 +1,8 @@
 
 using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
+#endif
 
 [RequireComponent(typeof(Rigidbody), typeof(BoxCollider))]
 public sealed class TukTukController : MonoBehaviour
@@ -22,9 +24,27 @@ public sealed class TukTukController : MonoBehaviour
     private float steeringInput;
     private bool isBraking;
     private bool warnedAboutMissingKeyboard;
+    private bool keyboardDetected;
+    private bool forwardKeyPressed;
+    private bool reverseKeyPressed;
+    private bool leftKeyPressed;
+    private bool rightKeyPressed;
 
     public float ThrottleInput => throttleInput;
     public float SteeringInput => steeringInput;
+    public bool KeyboardDetected => keyboardDetected;
+    public bool ForwardKeyPressed => forwardKeyPressed;
+    public bool ReverseKeyPressed => reverseKeyPressed;
+    public bool LeftKeyPressed => leftKeyPressed;
+    public bool RightKeyPressed => rightKeyPressed;
+
+#if ENABLE_INPUT_SYSTEM
+    public string InputBackend => "Input System";
+#elif ENABLE_LEGACY_INPUT_MANAGER
+    public string InputBackend => "Legacy Input Manager";
+#else
+    public string InputBackend => "No input backend";
+#endif
 
     public float CurrentSpeedKph
     {
@@ -48,7 +68,6 @@ public sealed class TukTukController : MonoBehaviour
         body.angularDamping = 4f;
         body.interpolation = RigidbodyInterpolation.Interpolate;
         body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-        body.constraints = RigidbodyConstraints.None;
         body.centerOfMass = new Vector3(0f, -0.42f, 0f);
         body.WakeUp();
 
@@ -58,12 +77,12 @@ public sealed class TukTukController : MonoBehaviour
 
     private void Update()
     {
+#if ENABLE_INPUT_SYSTEM
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null)
         {
-            throttleInput = 0f;
-            steeringInput = 0f;
-            isBraking = false;
+            keyboardDetected = false;
+            ClearInput();
             if (!warnedAboutMissingKeyboard)
             {
                 Debug.LogWarning(
@@ -76,19 +95,44 @@ public sealed class TukTukController : MonoBehaviour
 
         warnedAboutMissingKeyboard = false;
 
+        keyboardDetected = true;
+        forwardKeyPressed = keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed;
+        reverseKeyPressed = keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed;
+        leftKeyPressed = keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed;
+        rightKeyPressed = keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed;
+        isBraking = keyboard.spaceKey.isPressed;
         if (keyboard.rKey.wasPressedThisFrame)
         {
             ResetVehicle();
             return;
         }
+#elif ENABLE_LEGACY_INPUT_MANAGER
+        keyboardDetected = true;
+        forwardKeyPressed = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
+        reverseKeyPressed = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
+        leftKeyPressed = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow);
+        rightKeyPressed = Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow);
+        isBraking = Input.GetKey(KeyCode.Space);
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            ResetVehicle();
+            return;
+        }
+#else
+        keyboardDetected = false;
+        ClearInput();
+        if (!warnedAboutMissingKeyboard)
+        {
+            Debug.LogError(
+                "Tuk-tuk controls are unavailable because neither Unity input backend is enabled.",
+                this);
+            warnedAboutMissingKeyboard = true;
+        }
+        return;
+#endif
 
-        bool forward = keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed;
-        bool reverse = keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed;
-        bool right = keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed;
-        bool left = keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed;
-        throttleInput = (forward ? 1f : 0f) - (reverse ? 1f : 0f);
-        steeringInput = (right ? 1f : 0f) - (left ? 1f : 0f);
-        isBraking = keyboard.spaceKey.isPressed;
+        throttleInput = (forwardKeyPressed ? 1f : 0f) - (reverseKeyPressed ? 1f : 0f);
+        steeringInput = (rightKeyPressed ? 1f : 0f) - (leftKeyPressed ? 1f : 0f);
     }
 
     private void FixedUpdate()
@@ -151,6 +195,21 @@ public sealed class TukTukController : MonoBehaviour
         throttleInput = 0f;
         steeringInput = 0f;
         isBraking = false;
+        forwardKeyPressed = false;
+        reverseKeyPressed = false;
+        leftKeyPressed = false;
+        rightKeyPressed = false;
+    }
+
+    private void ClearInput()
+    {
+        throttleInput = 0f;
+        steeringInput = 0f;
+        isBraking = false;
+        forwardKeyPressed = false;
+        reverseKeyPressed = false;
+        leftKeyPressed = false;
+        rightKeyPressed = false;
     }
 
     private void OnGUI()
@@ -159,10 +218,20 @@ public sealed class TukTukController : MonoBehaviour
         if (!showControlDebugOverlay)
             return;
 
-        GUI.Box(new Rect(12f, 12f, 290f, 76f), "TukTuk Controls");
+        string keyboardState = keyboardDetected
+            ? InputBackend == "Legacy Input Manager" ? "API active" : "DETECTED"
+            : "NOT DETECTED";
+        string rigidbodyState = body == null
+            ? "MISSING"
+            : $"active={body.gameObject.activeInHierarchy}, kinematic={body.isKinematic}, collisions={body.detectCollisions}";
+        GUI.Box(new Rect(12f, 12f, 360f, 154f), "TukTuk Controls");
         GUI.Label(
-            new Rect(22f, 38f, 270f, 42f),
-            $"Speed: {CurrentSpeedKph:0.0} km/h   Forward: {throttleInput:0.0}\nSteering: {steeringInput:0.0}   Brake: {(isBraking ? "ON" : "OFF")}");
+            new Rect(22f, 38f, 340f, 120f),
+            $"Input: {InputBackend} | Keyboard: {keyboardState}\n" +
+            $"W/Up: {forwardKeyPressed}  S/Down: {reverseKeyPressed}  A/Left: {leftKeyPressed}  D/Right: {rightKeyPressed}\n" +
+            $"Forward: {throttleInput:0.0}  Steering: {steeringInput:0.0}  Brake: {(isBraking ? "ON" : "OFF")}\n" +
+            $"Speed: {CurrentSpeedKph:0.0} km/h | Controller: {(isActiveAndEnabled ? "ENABLED" : "DISABLED")}\n" +
+            $"Rigidbody: {rigidbodyState}");
 #endif
     }
 }
